@@ -1,7 +1,6 @@
 from starlette.testclient import TestClient
 
 from app import main
-from tests.conftest import API_KEY_HEADER
 
 
 class _StubGraph:
@@ -16,7 +15,7 @@ class _StubGraph:
         }
 
 
-def test_pii_detected_is_persisted_when_analyzer_flags_pii(monkeypatch):
+def test_pii_detected_is_persisted_when_analyzer_flags_pii(monkeypatch, api_key_header):
     """Regression test for a bug that shipped silently: pii_detected was derived
     from a non-existent 'pii_entities' key, so every audit row was written with
     pii_detected=False even when the analyzer flagged PII."""
@@ -32,7 +31,7 @@ def test_pii_detected_is_persisted_when_analyzer_flags_pii(monkeypatch):
         response = client.post(
             "/v1/security/scan",
             json={"user_id": "emp_992", "original_prompt": "La password es hunter2."},
-            headers=API_KEY_HEADER,
+            headers=api_key_header,
         )
 
     assert response.status_code == 200
