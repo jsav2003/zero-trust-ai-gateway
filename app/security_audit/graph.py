@@ -15,10 +15,10 @@ class SecurityGraphState(TypedDict):
     pii_detected: bool
 
 # 2. El Motor de IA (Gemini 3.5 Flash)
-# Usamos temperature=0.0 porque en ciberseguridad queremos determinismo absoluto, no creatividad.
+# Gemini 3.x deprecó los parámetros de sampling (temperature, top_p, top_k),
+# por lo que ya no se envían en la configuración del modelo.
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.5-flash",
-    temperature=0.0,
     api_key=settings.GOOGLE_API_KEY
 )
 
