@@ -23,7 +23,7 @@ graph TD
         Sanitizer["🛡️ sanitizer_node<br>(Contextual Redaction)"]:::ai
     end
     
-    Gemini["☁️ Google Gemini 3.5 Flash<br>(LLM / Structured Output)"]:::cloud
+    Gemini["☁️ Google Gemini 3.6 Flash<br>(LLM / Structured Output)"]:::cloud
     LangSmith["📊 LangSmith<br>(Telemetry & Observability)"]:::cloud
     
     subgraph "🐳 Docker Environment"
@@ -49,7 +49,7 @@ graph TD
 ## 🌟 Key Features
 **Cognitive Routing Engine**: Implemented via LangGraph as a deterministic state machine that evaluates security metrics before executing payload redaction.
 
-**Strict Structured Output**: Leverages Pydantic v2 interfacing with Gemini 3.5 Flash to guarantee type-safe, validated JSON structures from the LLM, eliminating hallucinations.
+**Strict Structured Output**: Leverages Pydantic v2 interfacing with Gemini 3.6 Flash to guarantee type-safe, validated JSON structures from the LLM, eliminating hallucinations.
 
 **High-Concurrency Architecture**: Engineered with FastAPI utilizing an asynchronous connection pool (asyncpg + SQLAlchemy) to handle massive request volumes without blocking I/O thresholds.
 
@@ -58,9 +58,9 @@ graph TD
 **Production Observability**: Integrated with LangSmith tracing API for comprehensive latency tracking, token financial budgeting, and multi-node logical flow debugging.
 
 ## 🛠️ Tech Stack
-* **Backend Framework**: FastAPI (Python 3.11+)
+* **Backend Framework**: FastAPI (Python 3.12+)
 * **AI Orchestration**: LangGraph, LangChain Core
-* **Cognitive Brain**: Google Gemini 3.5 Flash API
+* **Cognitive Brain**: Google Gemini 3.6 Flash API
 * **Database & Infrastructure**: PostgreSQL (with pgvector readiness), Docker, Docker Compose
 * **Data Validation & ORM**: Pydantic v2, SQLAlchemy 2.0, Alembic (Database Migrations)
 * **Observability**: LangSmith Telemetry
