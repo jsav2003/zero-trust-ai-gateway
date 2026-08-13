@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 # Nuevos imports de infraestructura
 from app.core.database import AsyncSessionLocal
+from app.core.security import require_api_key
 from app.security_audit.models import SecurityAuditLog
 from app.security_audit.graph import security_audit_graph
 from app.security_audit.schemas import SecurityAuditLogCreate, SecurityAuditLogRead
@@ -52,7 +53,8 @@ async def persist_audit_log_task(log_data: Dict[str, Any]) -> None:
     "/v1/security/scan",
     response_model=SecurityAuditLogRead,
     status_code=status.HTTP_200_OK,
-    summary="Intercept, evaluate, and sanitize user prompts under Zero-Trust constraints."
+    summary="Intercept, evaluate, and sanitize user prompts under Zero-Trust constraints.",
+    dependencies=[Depends(require_api_key)]
 )
 async def scan_prompt(
     payload: SecurityAuditLogCreate, 

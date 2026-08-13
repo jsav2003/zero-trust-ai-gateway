@@ -19,8 +19,15 @@ class Settings(BaseSettings):
 
     # Google AI Configuration
     GOOGLE_API_KEY: str = Field(
-        default="", 
+        default="",
         description="Google API Key for Gemini."
+    )
+
+    # Gateway Authentication
+    # Named GATEWAY_API_KEY (not API_KEY) to stay unambiguous next to GOOGLE_API_KEY
+    GATEWAY_API_KEY: str = Field(
+        default="",
+        description="Shared secret callers must send in the X-API-Key header."
     )
 
     # Configuration for loading from .env file
