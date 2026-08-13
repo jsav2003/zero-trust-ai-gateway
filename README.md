@@ -1,156 +1,112 @@
-# Zero-Trust Cognitive AI Gateway
+# Zero Trust AI Gateway
 
-An asynchronous, cloud-native API Gateway designed to intercept, analyze, and sanitize incoming user prompts in real-time before they reach internal LLM orchestrators. Built with a Zero-Trust security model, this system detects Personal Identifiable Information (PII), assesses security risks using advanced semantic analysis, and redacts sensitive data dynamically.
+A prompt scanning service: it analyzes a prompt for PII and risk, redacts it when needed, and writes an audit record. It is the scan component of a zero-trust LLM setup — it does not proxy traffic to a downstream model, and it is not a drop-in replacement for one.
 
-## 🏗️ Solution Architecture
+Built with FastAPI, LangGraph and Gemini 3.6 Flash.
 
-The gateway separates the core synchronous execution path (low-latency prompt engineering) from the asynchronous database persistence layer using non-blocking I/O workers.
+<!-- TODO: reemplazar por el GIF de 15s (curl con prompt sucio -> respuesta redactada) -->
+![Demo](docs/demo.gif)
 
-```mermaid
-graph TD
-    classDef client fill:#2d3436,stroke:#74b9ff,stroke-width:2px,color:#fff;
-    classDef api fill:#0984e3,stroke:#74b9ff,stroke-width:2px,color:#fff;
-    classDef ai fill:#6c5ce7,stroke:#a29bfe,stroke-width:2px,color:#fff;
-    classDef db fill:#00b894,stroke:#55efc4,stroke-width:2px,color:#fff;
-    classDef cloud fill:#fdcb6e,stroke:#ffeaa7,stroke-width:2px,color:#2d3436;
+---
 
-    Client["📱 Client / Frontend<br>(REST API Request)"]:::client
-    API["⚡ FastAPI (Gateway)<br>Pydantic Validation"]:::api
-    
-    subgraph "🧠 Cognitive Agent Graph (LangGraph)"
-        Analyzer["🔍 analyzer_node<br>(PII & Risk Evaluation)"]:::ai
-        Router{"🔀 routing_logic"}:::ai
-        Sanitizer["🛡️ sanitizer_node<br>(Contextual Redaction)"]:::ai
-    end
-    
-    Gemini["☁️ Google Gemini 3.6 Flash<br>(LLM / Structured Output)"]:::cloud
-    LangSmith["📊 LangSmith<br>(Telemetry & Observability)"]:::cloud
-    
-    subgraph "🐳 Docker Environment"
-        DB[("🐘 PostgreSQL + pgvector<br>(Async Audit Logging)")]:::db
-    end
+## What it does
 
-    Client -->|POST /v1/security/scan| API
-    API -->|1. Invoke Graph| Analyzer
-    API -.->|2. Delegate Task| DB
-    
-    Analyzer <-->|Prompt + Strict Schema| Gemini
-    Analyzer --> Router
-    Router -->|Risk > 5.0 or PII| Sanitizer
-    Router -->|Clean Flow| API
-    Sanitizer <-->|Semantic Masking| Gemini
-    Sanitizer --> API
-    
-    API -->|HTTP 200 Response| Client
-    Analyzer -.->|Telemetry Trace| LangSmith
-    Sanitizer -.->|Telemetry Trace| LangSmith
-```
+`POST /v1/security/scan` runs a two-node LangGraph over the incoming prompt:
 
-## 🌟 Key Features
-**Cognitive Routing Engine**: Implemented via LangGraph as a deterministic state machine that evaluates security metrics before executing payload redaction.
+1. **Analyzer** — one Gemini call with structured output, returning `risk_score` (0–10) and `pii_detected` (bool).
+2. **Router** — a pure function, no external calls:
 
-**Strict Structured Output**: Leverages Pydantic v2 interfacing with Gemini 3.6 Flash to guarantee type-safe, validated JSON structures from the LLM, eliminating hallucinations.
+   ```python
+   if state["pii_detected"] or state["risk_score"] > 5.0:
+       return "sanitizer_node"
+   return END
+   ```
 
-**High-Concurrency Architecture**: Engineered with FastAPI utilizing an asynchronous connection pool (asyncpg + SQLAlchemy) to handle massive request volumes without blocking I/O thresholds.
+3. **Sanitizer** — a second Gemini call that replaces sensitive spans with `[REDACTED]`. Only runs when the router sends it there.
 
-**Fault-Tolerant Persistence**: Utilizes FastAPI BackgroundTasks to offload relational auditing into isolated Dockerized PostgreSQL containers, ensuring API up-time even during database overhead.
+The response is returned immediately; the audit record is written to PostgreSQL in a background task.
 
-**Production Observability**: Integrated with LangSmith tracing API for comprehensive latency tracking, token financial budgeting, and multi-node logical flow debugging.
+**Cost per request:** one Gemini call for a clean prompt, two when redaction is triggered.
 
-## 🛠️ Tech Stack
-* **Backend Framework**: FastAPI (Python 3.12+)
-* **AI Orchestration**: LangGraph, LangChain Core
-* **Cognitive Brain**: Google Gemini 3.6 Flash API
-* **Database & Infrastructure**: PostgreSQL (with pgvector readiness), Docker, Docker Compose
-* **Data Validation & ORM**: Pydantic v2, SQLAlchemy 2.0, Alembic (Database Migrations)
-* **Observability**: LangSmith Telemetry
+## Quickstart
 
-## 🚀 Getting Started
-### 1. Environment Configuration
-Create a `.env` file in the root directory:
-
-```env
-ENV=development
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/gateway_db
-
-# Google AI Studio
-GOOGLE_API_KEY=your_gemini_api_key_here
-
-# Gateway authentication (required) and CORS allowlist
-GATEWAY_API_KEY=your_shared_gateway_secret_here
-CORS_ALLOW_ORIGINS=http://localhost:8000
-
-# LangSmith Telemetry
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_PROJECT=enterprise-ai-gateway
-LANGCHAIN_API_KEY=your_langsmith_api_key_here
-```
-
-### 2. Infrastructure Deployment (Docker)
-Spin up the isolated database infrastructure:
+Requires Python 3.12 and Docker.
 
 ```bash
-docker-compose up -d
-```
+git clone https://github.com/jsav2003/zero-trust-ai-gateway.git
+cd zero-trust-ai-gateway
 
-### 3. Database Migrations (Alembic)
-Apply the relational schema versioning downstream into the live container:
-
-```bash
+cp .env.example .env        # fill in GOOGLE_API_KEY and GATEWAY_API_KEY
+docker compose up -d db     # PostgreSQL on :5432
 alembic upgrade head
-```
 
-### 4. Running the Application Server
-Execute the asynchronous server worker injecting the environment configuration:
-
-```bash
-uvicorn app.main:app --reload --env-file .env
-```
-The interactive interactive documentation will be available at http://127.0.0.1:8000/docs.
-
-### 5. Running the Test Suite
-The suite touches neither PostgreSQL nor the Google API, so no credentials are needed:
-
-```bash
 pip install -e ".[dev]"
-pytest
+uvicorn app.main:app --env-file .env --reload
 ```
 
-## 🔐 Authentication
-Every call to `/v1/security/scan` must carry the shared secret in an `X-API-Key`
-header. Requests without it, or with a wrong key, get `401`. If `GATEWAY_API_KEY`
-is not configured the gateway **fails closed** and returns `503` rather than
-serving unauthenticated traffic.
+Then:
 
-`/health` is intentionally left public so orchestrators can probe liveness.
-
-## 📊 API Verification Example
-### Request Payload (POST /v1/security/scan)
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/security/scan \
-  -H "X-API-Key: $GATEWAY_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d @- <<'JSON'
-{
-  "user_id": "emp_992_enterprise",
-  "original_prompt": "Hey team, here are the production credentials. The user is db_admin and the password is M1S3cr3t0G00gl3. Keep it safe."
-}
-JSON
+curl -X POST localhost:8000/v1/security/scan \
+  -H 'X-API-Key: <your-gateway-key>' \
+  -H 'Content-Type: application/json' \
+  -d '{"user_id":"u1","original_prompt":"my ID is 1144012345 and I live in Cali"}'
 ```
 
-### Sanitized Response (HTTP 200 OK)
-```json
-{
-  "user_id": "emp_992_enterprise",
-  "original_prompt": "Hey team, here are the production credentials. The user is db_admin and the password is M1S3cr3t0G00gl3. Keep it safe.",
-  "sanitized_prompt": "Hey team, here are the production credentials. The user is [REDACTED] and the password is [REDACTED]. Keep it safe.",
-  "risk_score": 9.8,
-  "pii_detected": true,
-  "id": "72efc80b-3ea1-4753-a9d1-de0c05eec394",
-  "timestamp": "2026-07-08T03:19:39.965275Z"
-}
+Interactive docs at `/docs`.
+
+## API
+
+| Method | Path | Auth |
+|---|---|---|
+| `POST` | `/v1/security/scan` | `X-API-Key` |
+| `GET` | `/health` | none |
+| `GET` | `/docs`, `/redoc`, `/openapi.json` | none |
+
+That's the whole surface. There is no endpoint to read the audit log back — records are queried directly in SQL.
+
+Authentication is a single shared secret compared with `secrets.compare_digest`. If `GATEWAY_API_KEY` is unset the scan endpoint returns `503` rather than accepting every caller — an unset key would otherwise make the comparison succeed against an empty header.
+
+## Configuration
+
+| Variable | Default | If missing |
+|---|---|---|
+| `GOOGLE_API_KEY` | `""` | graph fails on the first request, not at startup |
+| `GATEWAY_API_KEY` | `""` | `/v1/security/scan` returns `503` |
+| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/gateway_db` | uses default |
+| `CORS_ALLOW_ORIGINS` | `http://localhost:8000` | uses default |
+
+The Gemini client is built lazily and cached, so importing the app requires no credentials — the module imports cleanly in CI and in a bare container.
+
+## Tests
+
+```bash
+pytest -v
 ```
 
-## 📜 License
-This project is licensed under the MIT License.
+Six cases, no network, no database, no API key required. They cover the routing rule (including the `5.0` boundary, which does *not* route to the sanitizer) and the persistence path with the graph stubbed.
+
+The endpoint test exists for a specific reason. `pii_detected` was being read from a state key that never existed, so it silently persisted as `false` on every record — including the ones the analyzer had flagged and the sanitizer had redacted. The bug survived because nothing covered it. The test was verified by reintroducing the broken expression and confirming it fails.
+
+## Known limitations
+
+These are properties of the current implementation, not a roadmap.
+
+- **The audit write is best-effort.** The client gets `200` before the `INSERT` completes. If it fails, the exception is logged to stdout and never retried, and the caller has no way to know the record was lost.
+- **`original_prompt` is stored in plaintext**, including the spans the analyzer flagged as PII. No column-level encryption, no retention policy.
+- **`sanitized_prompt` equals `original_prompt` when nothing was redacted.** The initial state seeds it with the original, and the sanitizer never runs on a clean prompt. Identical values mean *not sanitized*, not *sanitized and unchanged*.
+- **A `risk_score` outside 0–10 loses the record entirely.** The analyzer's output is unbounded, the response model is not. If Gemini returns `10.5`, response validation raises, the client gets `500`, and the background task never runs — so no audit row is written either.
+- **`user_id` is supplied by the caller and never verified.** The gateway authenticates the calling *service*, not the end user. Anyone holding the key can write records attributed to any `user_id`.
+- **Detection depends on the model's judgment**, not on deterministic rules. There is no regex fallback, no allowlist, and no validation that the sanitizer returned only the sanitized text.
+- **No rate limiting**, no key rotation, no timeouts or retries on the Gemini calls.
+- **`/health` is a static response.** It does not check PostgreSQL or the Gemini API, so a `200` says the process is up and nothing more.
+
+`docs/estado-real.md` is the full inventory of what the code does and doesn't do, verified against the source rather than against this file.
+
+## Not implemented
+
+Named explicitly because the architecture implies them: downstream LLM proxying, an audit-log read API, LangSmith instrumentation, pgvector embeddings, an application Dockerfile, and CI.
+
+## License
+
+MIT
