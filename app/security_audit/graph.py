@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import TypedDict
 from langgraph.graph import StateGraph, END
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -14,20 +15,29 @@ class SecurityGraphState(TypedDict):
     risk_score: float
     pii_detected: bool
 
-# 2. El Motor de IA (Gemini 3.5 Flash)
-# Gemini 3.x deprecó los parámetros de sampling (temperature, top_p, top_k),
-# por lo que ya no se envían en la configuración del modelo.
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.5-flash",
-    api_key=settings.GOOGLE_API_KEY
-)
-
-# 3. Esquema Estricto para forzar a Gemini a devolver datos computables
+# 2. Esquema Estricto para forzar a Gemini a devolver datos computables
 class AnalyzerOutput(BaseModel):
     risk_score: float = Field(description="Nivel de riesgo del 0.0 al 10.0.")
     pii_detected: bool = Field(description="True si se detectan contraseñas, emails, nombres o datos sensibles.")
 
-analyzer_llm = llm.with_structured_output(AnalyzerOutput)
+# 3. El Motor de IA (Gemini 3.6 Flash)
+# Gemini 3.x deprecó los parámetros de sampling (temperature, top_p, top_k),
+# por lo que ya no se envían en la configuración del modelo.
+@lru_cache(maxsize=1)
+def get_llm() -> ChatGoogleGenerativeAI:
+    """Difiere la construcción del cliente hasta el primer uso real.
+    Importar este módulo no debe exigir credenciales: sin esto, un entorno
+    sin GOOGLE_API_KEY (CI, imagen Docker limpia) no puede ni importar la app.
+    """
+    return ChatGoogleGenerativeAI(
+        model="gemini-3.6-flash",
+        api_key=settings.GOOGLE_API_KEY
+    )
+
+@lru_cache(maxsize=1)
+def get_analyzer_llm():
+    """Variante del modelo forzada al esquema AnalyzerOutput."""
+    return get_llm().with_structured_output(AnalyzerOutput)
 
 # --- NODOS DEL GRAFO ---
 
@@ -38,7 +48,7 @@ async def analyzer_node(state: SecurityGraphState):
         ("user", "{text}")
     ])
     
-    chain = prompt | analyzer_llm
+    chain = prompt | get_analyzer_llm()
     result = await chain.ainvoke({"text": state["original_prompt"]})
     
     return {
@@ -53,7 +63,7 @@ async def sanitizer_node(state: SecurityGraphState):
         ("user", "{text}")
     ])
     
-    chain = prompt | llm
+    chain = prompt | get_llm()
     result = await chain.ainvoke({"text": state["original_prompt"]})
     
     content = result.content
