@@ -4,7 +4,6 @@ A prompt scanning service: it analyzes a prompt for PII and risk, redacts it whe
 
 Built with FastAPI, LangGraph and Gemini 3.6 Flash.
 
-<!-- TODO: reemplazar por el GIF de 15s (curl con prompt sucio -> respuesta redactada) -->
 ![Demo](docs/demo.gif)
 
 ---
