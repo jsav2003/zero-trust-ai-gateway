@@ -67,7 +67,6 @@ async def scan_prompt(
     # 1. Inicialización del estado requerido por el StateGraph de LangGraph
     initial_state = {
         "original_prompt": payload.original_prompt,
-        "pii_entities": [],
         "risk_score": 0.0,
         "sanitized_prompt": payload.original_prompt
     }
@@ -92,7 +91,7 @@ async def scan_prompt(
         "original_prompt": payload.original_prompt,
         "sanitized_prompt": graph_output.get("sanitized_prompt"),
         "risk_score": graph_output.get("risk_score", 0.0),
-        "pii_detected": len(graph_output.get("pii_entities", [])) > 0,
+        "pii_detected": graph_output.get("pii_detected", False),
         "timestamp": processed_timestamp
     }
 
