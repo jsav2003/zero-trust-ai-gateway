@@ -6,6 +6,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
 # Nuevos imports de infraestructura
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.security import require_api_key
 from app.security_audit.models import SecurityAuditLog
@@ -21,10 +22,10 @@ app = FastAPI(
 # Configuración estricta de CORS para entornos distribuidos
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, reemplazar con dominios específicos (ej. https://ai.enterprise.com)
-    allow_credentials=True,
-    allow_methods=["POST", "GET"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_origins=settings.cors_allow_origins,
+    allow_credentials=False,  # El gateway autentica por API key, no por cookies de sesión
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
 async def persist_audit_log_task(log_data: Dict[str, Any]) -> None:

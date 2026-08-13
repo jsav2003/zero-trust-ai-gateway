@@ -30,6 +30,19 @@ class Settings(BaseSettings):
         description="Shared secret callers must send in the X-API-Key header."
     )
 
+    # CORS Configuration
+    # Kept as a plain comma-separated string on purpose: typing this as list[str]
+    # makes pydantic-settings parse the env var as JSON, which breaks "a,b" input.
+    CORS_ALLOW_ORIGINS: str = Field(
+        default="http://localhost:8000",
+        description="Comma-separated list of origins allowed to call the gateway."
+    )
+
+    @property
+    def cors_allow_origins(self) -> list[str]:
+        """CORS_ALLOW_ORIGINS split into the list CORSMiddleware expects."""
+        return [origin.strip() for origin in self.CORS_ALLOW_ORIGINS.split(",") if origin.strip()]
+
     # Configuration for loading from .env file
     model_config = SettingsConfigDict(
         env_file=".env", 
