@@ -26,8 +26,13 @@ async def require_api_key(api_key: Optional[str] = Security(_api_key_header)) ->
             detail="API key authentication is not configured on this gateway."
         )
 
-    # Constant-time comparison to avoid leaking the key through timing analysis
-    if not api_key or not secrets.compare_digest(api_key, expected):
+    # Constant-time comparison to avoid leaking the key through timing analysis.
+    # Both operands are encoded first: compare_digest only accepts str when it is
+    # ASCII-only, and Starlette decodes header bytes as latin-1, so a header with
+    # any byte >127 would otherwise raise TypeError and surface as a 500.
+    if not api_key or not secrets.compare_digest(
+        api_key.encode("utf-8"), expected.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key."

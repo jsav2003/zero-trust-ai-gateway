@@ -43,3 +43,23 @@ def test_pii_detected_is_persisted_when_analyzer_flags_pii(monkeypatch):
     assert captured["pii_detected"] is True
     assert captured["risk_score"] == 9.8
     assert captured["sanitized_prompt"] == "La password es [REDACTED]."
+
+
+def test_non_ascii_api_key_is_rejected_with_401():
+    """secrets.compare_digest solo acepta str ASCII, y Starlette decodifica los
+    headers como latin-1: sin encodear ambos operandos, una clave con bytes >127
+    reventaba con TypeError y salia como 500 en vez de 401."""
+    # Se manda como bytes crudos: un str no-ASCII lo rechaza el cliente HTTP antes
+    # de salir, asi que no llegaria nunca al server.
+    non_ascii_key = "café".encode("latin-1")
+
+    # raise_server_exceptions=False para que una regresion se vea como 500 != 401
+    # en vez de un traceback crudo.
+    with TestClient(main.app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/v1/security/scan",
+            json={"user_id": "emp_992", "original_prompt": "hola"},
+            headers={"X-API-Key": non_ascii_key},
+        )
+
+    assert response.status_code == 401
