@@ -76,6 +76,10 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/gateway_db
 # Google AI Studio
 GOOGLE_API_KEY=your_gemini_api_key_here
 
+# Gateway authentication (required) and CORS allowlist
+GATEWAY_API_KEY=your_shared_gateway_secret_here
+CORS_ALLOW_ORIGINS=http://localhost:8000
+
 # LangSmith Telemetry
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
@@ -105,13 +109,34 @@ uvicorn app.main:app --reload --env-file .env
 ```
 The interactive interactive documentation will be available at http://127.0.0.1:8000/docs.
 
+### 5. Running the Test Suite
+The suite touches neither PostgreSQL nor the Google API, so no credentials are needed:
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+## 🔐 Authentication
+Every call to `/v1/security/scan` must carry the shared secret in an `X-API-Key`
+header. Requests without it, or with a wrong key, get `401`. If `GATEWAY_API_KEY`
+is not configured the gateway **fails closed** and returns `503` rather than
+serving unauthenticated traffic.
+
+`/health` is intentionally left public so orchestrators can probe liveness.
+
 ## 📊 API Verification Example
 ### Request Payload (POST /v1/security/scan)
-```json
+```bash
+curl -X POST http://127.0.0.1:8000/v1/security/scan \
+  -H "X-API-Key: $GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
 {
   "user_id": "emp_992_enterprise",
   "original_prompt": "Hey team, here are the production credentials. The user is db_admin and the password is M1S3cr3t0G00gl3. Keep it safe."
 }
+JSON
 ```
 
 ### Sanitized Response (HTTP 200 OK)
