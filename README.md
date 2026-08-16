@@ -1,5 +1,7 @@
 # Zero Trust AI Gateway
 
+[![CI](https://github.com/jsav2003/zero-trust-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/jsav2003/zero-trust-ai-gateway/actions/workflows/ci.yml)
+
 A prompt scanning service: it analyzes a prompt for PII and risk, redacts it when needed, and writes an audit record. It is the scan component of a zero-trust LLM setup — it does not proxy traffic to a downstream model, and it is not a drop-in replacement for one.
 
 Built with FastAPI, LangGraph and Gemini 3.6 Flash.
