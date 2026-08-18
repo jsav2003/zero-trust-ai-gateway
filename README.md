@@ -1,7 +1,5 @@
 # Zero Trust AI Gateway
 
-[![CI](https://github.com/jsav2003/zero-trust-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/jsav2003/zero-trust-ai-gateway/actions/workflows/ci.yml)
-
 A prompt scanning service: it analyzes a prompt for PII and risk, redacts it when needed, and writes an audit record. It is the scan component of a zero-trust LLM setup — it does not proxy traffic to a downstream model, and it is not a drop-in replacement for one.
 
 Built with FastAPI, LangGraph and Gemini 3.6 Flash.
@@ -77,7 +75,7 @@ Authentication is a single shared secret compared with `secrets.compare_digest`.
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/gateway_db` | uses default |
 | `CORS_ALLOW_ORIGINS` | `http://localhost:8000` | uses default |
 
-The Gemini client is built lazily and cached, so importing the app requires no credentials — the module imports cleanly in CI and in a bare container.
+The Gemini client is built lazily and cached, so importing the app requires no credentials — the module imports cleanly in a bare container.
 
 ## Tests
 
